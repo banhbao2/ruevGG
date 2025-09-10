@@ -1,11 +1,10 @@
 import Foundation
 
-// MARK: - Duo Analysis Models
-struct DuoStats: Identifiable {
-    let id = UUID()
-    let player1: CompletePlayer
-    let player2: CompletePlayer
-    var gamesPlayedTogether: Int = 0
+// MARK: - Team Analysis Models
+struct GameModeStats {
+    var modeName: String
+    var queueId: Int
+    var games: Int = 0
     var wins: Int = 0
     var losses: Int = 0
     
@@ -15,18 +14,66 @@ struct DuoStats: Identifiable {
     }
 }
 
-struct DuoGameDetails {
-    let matchId: String
-    let player1Stats: ParticipantDetails
-    let player2Stats: ParticipantDetails
-    let won: Bool
-    let gameDuration: Int
+struct TeamStats: Identifiable {
+    let id = UUID()
+    let players: [CompletePlayer]
+    var gamesPlayedTogether: Int = 0
+    var wins: Int = 0
+    var losses: Int = 0
+    var gamesByMode: [Int: GameModeStats] = [:] // queueId -> GameModeStats
+    
+    var winRate: Double {
+        let total = wins + losses
+        return total > 0 ? (Double(wins) / Double(total)) * 100 : 0
+    }
+    
+    var playerNames: String {
+        players.map { $0.displayName }.joined(separator: ", ")
+    }
+    
+    // Get sorted game modes by number of games
+    var sortedGameModes: [GameModeStats] {
+        gamesByMode.values.sorted { $0.games > $1.games }
+    }
 }
 
-// MARK: - Duo Analysis Manager
+// MARK: - Game Mode Mappings
+struct GameModeHelper {
+    static func getModeName(for queueId: Int) -> String {
+        switch queueId {
+        case 420: return "Ranked Solo/Duo"
+        case 440: return "Ranked Flex"
+        case 450: return "ARAM"
+        case 400: return "Normal Draft"
+        case 430: return "Normal Blind"
+        case 700: return "Clash"
+        case 830, 840, 850: return "Co-op vs AI"
+        case 900: return "URF"
+        case 920: return "Legend of the Poro King"
+        case 1020: return "One for All"
+        case 1300: return "Nexus Blitz"
+        case 1400: return "Ultimate Spellbook"
+        case 1700: return "Arena"
+        case 490: return "Quickplay"
+        default: return "Other Mode"
+        }
+    }
+    
+    static func getModeCategory(for queueId: Int) -> String {
+        switch queueId {
+        case 420, 440: return "Ranked"
+        case 450: return "ARAM"
+        case 400, 430, 490: return "Normal"
+        case 900, 920, 1020, 1300, 1400, 1700: return "Special"
+        default: return "Other"
+        }
+    }
+}
+
+// MARK: - Team Analysis Manager
 @MainActor
-class DuoAnalysisManager: ObservableObject {
-    @Published var duoStats: [DuoStats] = []
+class TeamAnalysisManager: ObservableObject {
+    @Published var teamStats: TeamStats?
     @Published var isAnalyzing: Bool = false
     @Published var analysisProgress: String = ""
     @Published var errorMessage: String = ""
@@ -42,31 +89,28 @@ class DuoAnalysisManager: ObservableObject {
     private let requestDelay: UInt64 = 1_200_000_000 // 1.2 seconds between requests
     private var lastRequestTime: Date = Date.distantPast
     
-    func analyzeDuoPerformance(players: [CompletePlayer]) async {
+    func analyzeTeamPerformance(players: [CompletePlayer]) async {
         guard players.count >= 2 else { return }
         
         isAnalyzing = true
-        duoStats.removeAll()
+        teamStats = nil
         matchHistoryCache.removeAll() // Clear cache for new analysis
         analysisProgress = "Fetching match histories..."
         
-        // First, fetch initial match histories with rate limiting
+        // Initialize team stats
+        var stats = TeamStats(players: players)
+        
+        // First, fetch initial match histories for all players
         for player in players {
-            if matchHistoryCache[player.puuid] == nil {
-                await fetchInitialMatchHistory(for: player)
-            }
+            await fetchInitialMatchHistory(for: player)
         }
         
-        // Now analyze all possible duo combinations using cached data
-        analysisProgress = "Analyzing duo combinations..."
-        for i in 0..<players.count {
-            for j in (i+1)..<players.count {
-                let player1 = players[i]
-                let player2 = players[j]
-                
-                await analyzePlayerPairUntilTarget(player1: player1, player2: player2)
-            }
-        }
+        // Find games where ALL players played together
+        analysisProgress = "Finding games where all \(players.count) players played together..."
+        await findTeamGames(players: players, stats: &stats)
+        
+        // Store the final stats
+        teamStats = stats
         
         isAnalyzing = false
         analysisProgress = ""
@@ -134,26 +178,27 @@ class DuoAnalysisManager: ObservableObject {
         }
     }
     
-    private func analyzePlayerPairUntilTarget(player1: CompletePlayer, player2: CompletePlayer) async {
-        analysisProgress = "Finding games with \(player1.displayName) & \(player2.displayName)..."
-        
-        var duoStat = DuoStats(player1: player1, player2: player2)
+    private func findTeamGames(players: [CompletePlayer], stats: inout TeamStats) async {
         var gamesFoundTogether = 0
         var matchesSearched = 0
         var currentBatchSize = 0
         
         // Continue searching until we find target games or hit the max search limit
-        while gamesFoundTogether < targetGamesCount && matchesSearched < maxMatchHistoryToSearch {
-            // Get cached match histories
-            guard let player1Matches = matchHistoryCache[player1.puuid],
-                  let player2Matches = matchHistoryCache[player2.puuid] else {
-                print("⚠️ No cached matches for duo analysis")
-                duoStats.append(duoStat)
+        while gamesFoundTogether < targetGamesCount && currentBatchSize < maxMatchHistoryToSearch {
+            // Get all cached match histories
+            let allPlayerMatches = players.compactMap { matchHistoryCache[$0.puuid] }
+            
+            // If any player doesn't have matches cached, something went wrong
+            guard allPlayerMatches.count == players.count else {
+                print("⚠️ Not all players have cached matches")
                 return
             }
             
-            // Find common matches from current cache
-            let commonMatches = Set(player1Matches).intersection(Set(player2Matches))
+            // Find common matches (games where ALL players participated)
+            var commonMatches = Set(allPlayerMatches[0])
+            for playerMatches in allPlayerMatches.dropFirst() {
+                commonMatches = commonMatches.intersection(Set(playerMatches))
+            }
             
             // Filter out already analyzed matches
             let newMatchesToAnalyze = Array(commonMatches).suffix(from: matchesSearched)
@@ -162,11 +207,12 @@ class DuoAnalysisManager: ObservableObject {
                 // Need to fetch more matches
                 let nextBatchSize = min(20, maxMatchHistoryToSearch - currentBatchSize)
                 
-                analysisProgress = "Searching more match history for \(player1.displayName) & \(player2.displayName)..."
+                analysisProgress = "Searching deeper in match history..."
                 
-                // Fetch more matches for both players
-                await fetchMatchHistoryBatch(for: player1, count: nextBatchSize, startIndex: currentBatchSize)
-                await fetchMatchHistoryBatch(for: player2, count: nextBatchSize, startIndex: currentBatchSize)
+                // Fetch more matches for all players
+                for player in players {
+                    await fetchMatchHistoryBatch(for: player, count: nextBatchSize, startIndex: currentBatchSize)
+                }
                 
                 currentBatchSize += nextBatchSize
                 continue
@@ -179,7 +225,7 @@ class DuoAnalysisManager: ObservableObject {
                 }
                 
                 matchesSearched += 1
-                analysisProgress = "Found \(gamesFoundTogether)/\(targetGamesCount) games together..."
+                analysisProgress = "Found \(gamesFoundTogether)/\(targetGamesCount) team games..."
                 
                 // Rate limiting for match details
                 let timeSinceLastRequest = Date().timeIntervalSince(lastRequestTime)
@@ -197,22 +243,53 @@ class DuoAnalysisManager: ObservableObject {
                     )
                     lastRequestTime = Date()
                     
-                    // Find both players in the match
-                    if let p1Stats = matchDetails.info.participants.first(where: { $0.puuid == player1.puuid }),
-                       let p2Stats = matchDetails.info.participants.first(where: { $0.puuid == player2.puuid }) {
+                    // Find all players in the match
+                    let playerStats = players.compactMap { player in
+                        matchDetails.info.participants.first(where: { $0.puuid == player.puuid })
+                    }
+                    
+                    // Check if all players were found and on the same team
+                    if playerStats.count == players.count {
+                        let firstTeamId = playerStats[0].teamId
+                        let allSameTeam = playerStats.allSatisfy { $0.teamId == firstTeamId }
                         
-                        // Check if they were on the same team
-                        if p1Stats.teamId == p2Stats.teamId {
+                        if allSameTeam {
                             gamesFoundTogether += 1
-                            duoStat.gamesPlayedTogether += 1
+                            stats.gamesPlayedTogether += 1
                             
-                            if p1Stats.win {
-                                duoStat.wins += 1
+                            let won = playerStats[0].win
+                            let queueId = matchDetails.info.queueId
+                            let modeName = GameModeHelper.getModeName(for: queueId)
+                            
+                            // Update overall stats
+                            if won {
+                                stats.wins += 1
                             } else {
-                                duoStat.losses += 1
+                                stats.losses += 1
                             }
                             
-                            print("  Game \(gamesFoundTogether): \(p1Stats.win ? "WIN" : "LOSS") - Same team")
+                            // Update mode-specific stats
+                            if stats.gamesByMode[queueId] != nil {
+                                stats.gamesByMode[queueId]!.games += 1
+                                if won {
+                                    stats.gamesByMode[queueId]!.wins += 1
+                                } else {
+                                    stats.gamesByMode[queueId]!.losses += 1
+                                }
+                            } else {
+                                var modeStats = GameModeStats(modeName: modeName, queueId: queueId)
+                                modeStats.games = 1
+                                if won {
+                                    modeStats.wins = 1
+                                } else {
+                                    modeStats.losses = 1
+                                }
+                                stats.gamesByMode[queueId] = modeStats
+                            }
+                            
+                            print("  Game \(gamesFoundTogether): \(won ? "WIN" : "LOSS") - \(modeName)")
+                        } else {
+                            print("  Match \(matchId): Players on different teams (not counted)")
                         }
                     }
                     
@@ -235,8 +312,9 @@ class DuoAnalysisManager: ObservableObject {
                     
                     analysisProgress = "Searching deeper in match history..."
                     
-                    await fetchMatchHistoryBatch(for: player1, count: nextBatchSize, startIndex: currentBatchSize)
-                    await fetchMatchHistoryBatch(for: player2, count: nextBatchSize, startIndex: currentBatchSize)
+                    for player in players {
+                        await fetchMatchHistoryBatch(for: player, count: nextBatchSize, startIndex: currentBatchSize)
+                    }
                     
                     currentBatchSize += nextBatchSize
                 } else {
@@ -246,22 +324,19 @@ class DuoAnalysisManager: ObservableObject {
             }
         }
         
-        print("📊 Final stats for \(player1.displayName) & \(player2.displayName):")
-        print("   Games together found: \(duoStat.gamesPlayedTogether) (target was \(targetGamesCount))")
-        print("   Wins: \(duoStat.wins), Losses: \(duoStat.losses)")
-        print("   Win rate: \(String(format: "%.1f%%", duoStat.winRate))")
+        print("📊 Final team stats for \(players.count) players:")
+        print("   Games together found: \(stats.gamesPlayedTogether) (target was \(targetGamesCount))")
+        print("   Wins: \(stats.wins), Losses: \(stats.losses)")
+        print("   Win rate: \(String(format: "%.1f%%", stats.winRate))")
+        print("   Game modes: \(stats.sortedGameModes.map { "\($0.modeName): \($0.games)" }.joined(separator: ", "))")
         print("   Total matches searched: \(matchesSearched)")
-        
-        // Add the duo stats to the results
-        duoStats.append(duoStat)
     }
     
     func reset() {
-        duoStats.removeAll()
+        teamStats = nil
         matchHistoryCache.removeAll()
         isAnalyzing = false
         analysisProgress = ""
         errorMessage = ""
     }
 }
-
