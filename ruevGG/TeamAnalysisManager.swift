@@ -74,6 +74,7 @@ struct GameModeHelper {
 @MainActor
 class TeamAnalysisManager: ObservableObject {
     @Published var teamStats: TeamStats?
+    @Published var playerPerformances: [String: PlayerPerformanceSummary] = [:] // puuid -> performance
     @Published var isAnalyzing: Bool = false
     @Published var analysisProgress: String = ""
     @Published var errorMessage: String = ""
@@ -94,11 +95,17 @@ class TeamAnalysisManager: ObservableObject {
         
         isAnalyzing = true
         teamStats = nil
+        playerPerformances.removeAll() // Clear player performances
         matchHistoryCache.removeAll() // Clear cache for new analysis
         analysisProgress = "Fetching match histories..."
         
         // Initialize team stats
         var stats = TeamStats(players: players)
+        
+        // Initialize player performance summaries
+        for player in players {
+            playerPerformances[player.puuid] = PlayerPerformanceSummary(player: player)
+        }
         
         // First, fetch initial match histories for all players
         for player in players {
@@ -287,6 +294,31 @@ class TeamAnalysisManager: ObservableObject {
                                 stats.gamesByMode[queueId] = modeStats
                             }
                             
+                            // Store individual player performance data
+                            for (player, playerStat) in zip(players, playerStats) {
+                                let matchData = PlayerMatchData(
+                                    matchId: matchId,
+                                    championName: playerStat.championName,
+                                    kills: playerStat.kills,
+                                    deaths: playerStat.deaths,
+                                    assists: playerStat.assists,
+                                    totalCS: playerStat.totalCS,
+                                    gameDuration: matchDetails.info.gameDuration,
+                                    win: playerStat.win,
+                                    queueId: queueId,
+                                    modeName: modeName,
+                                    teamPosition: playerStat.individualPosition,
+                                    totalDamageDealt: playerStat.totalDamageDealtToChampions ?? 0,
+                                    totalDamageTaken: playerStat.totalDamageTaken ?? 0,
+                                    goldEarned: playerStat.goldEarned ?? 0,
+                                    visionScore: playerStat.visionScore ?? 0,
+                                    gameCreation: Date(timeIntervalSince1970: Double(matchDetails.info.gameCreation) / 1000)
+                                )
+                                
+                                // Add to player's performance summary
+                                playerPerformances[player.puuid]?.matches.append(matchData)
+                            }
+                            
                             print("  Game \(gamesFoundTogether): \(won ? "WIN" : "LOSS") - \(modeName)")
                         } else {
                             print("  Match \(matchId): Players on different teams (not counted)")
@@ -334,6 +366,7 @@ class TeamAnalysisManager: ObservableObject {
     
     func reset() {
         teamStats = nil
+        playerPerformances.removeAll()
         matchHistoryCache.removeAll()
         isAnalyzing = false
         analysisProgress = ""

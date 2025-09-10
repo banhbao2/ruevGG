@@ -189,6 +189,10 @@ struct ParticipantDetails: Codable {
     let individualPosition: String // TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY
     let totalMinionsKilled: Int
     let neutralMinionsKilled: Int
+    let totalDamageDealtToChampions: Int?
+    let totalDamageTaken: Int?
+    let goldEarned: Int?
+    let visionScore: Int?
     
     var totalCS: Int {
         return totalMinionsKilled + neutralMinionsKilled

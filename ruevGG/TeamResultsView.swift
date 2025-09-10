@@ -39,25 +39,92 @@ struct TeamResultsView: View {
                             .font(.headline)
                             .padding(.horizontal)
                         
+                        Text("Tap a player to view detailed stats")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal)
+                        
                         ForEach(viewModel.foundPlayers, id: \.puuid) { player in
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(player.displayName)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                    Text("Level \(player.level)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                            if let performance = viewModel.playerPerformances[player.puuid],
+                               let teamStats = viewModel.teamStats {
+                                NavigationLink(destination:
+                                    PlayerDetailView(
+                                        player: player,
+                                        performanceSummary: performance,
+                                        gameModes: teamStats.sortedGameModes
+                                    )
+                                ) {
+                                    HStack {
+                                        VStack(alignment: .leading) {
+                                            Text(player.displayName)
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                                .foregroundColor(.primary)
+                                            HStack(spacing: 8) {
+                                                Text("Level \(player.level)")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                
+                                                if performance.totalGames > 0 {
+                                                    Text("•")
+                                                        .foregroundColor(.secondary)
+                                                    Text(String(format: "%.1f/%.1f/%.1f",
+                                                               performance.averageKills,
+                                                               performance.averageDeaths,
+                                                               performance.averageAssists))
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                            }
+                                        }
+                                        Spacer()
+                                        
+                                        VStack(alignment: .trailing, spacing: 2) {
+                                            if performance.totalGames > 0 {
+                                                Text(String(format: "%.0f%%", performance.winRate))
+                                                    .font(.subheadline)
+                                                    .fontWeight(.semibold)
+                                                    .foregroundColor(performance.winRate >= 50 ? .green : .red)
+                                                Text("\(performance.wins)W \(performance.losses)L")
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                            } else {
+                                                Image(systemName: "checkmark.circle.fill")
+                                                    .foregroundColor(.green)
+                                            }
+                                        }
+                                        
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.horizontal)
+                                    .padding(.vertical, 8)
+                                    .background(Color(.tertiarySystemBackground))
+                                    .cornerRadius(8)
+                                    .padding(.horizontal)
                                 }
-                                Spacer()
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
+                            } else {
+                                // Fallback for players without performance data
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(player.displayName)
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                        Text("Level \(player.level)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 8)
+                                .background(Color(.tertiarySystemBackground))
+                                .cornerRadius(8)
+                                .padding(.horizontal)
                             }
-                            .padding(.horizontal)
-                            .padding(.vertical, 8)
-                            .background(Color(.tertiarySystemBackground))
-                            .cornerRadius(8)
-                            .padding(.horizontal)
                         }
                     }
                 }

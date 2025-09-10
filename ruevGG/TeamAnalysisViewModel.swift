@@ -19,6 +19,7 @@ class TeamAnalysisViewModel: ObservableObject {
     // Results
     @Published var foundPlayers: [CompletePlayer] = []
     @Published var teamStats: TeamStats?
+    @Published var playerPerformances: [String: PlayerPerformanceSummary] = [:] // puuid -> performance
     
     // Error Handling
     @Published var showError = false
@@ -45,6 +46,7 @@ class TeamAnalysisViewModel: ObservableObject {
         hasErrors = false
         foundPlayers.removeAll()
         teamStats = nil
+        playerPerformances.removeAll()
         inputErrors = Array(repeating: nil, count: 5)
         
         // Parse and validate inputs
@@ -123,6 +125,7 @@ class TeamAnalysisViewModel: ObservableObject {
         
         // Store results
         teamStats = teamAnalysisManager.teamStats
+        playerPerformances = teamAnalysisManager.playerPerformances
         
         // Update state
         analysisComplete = true
@@ -152,6 +155,7 @@ class TeamAnalysisViewModel: ObservableObject {
         inputErrors = Array(repeating: nil, count: 5)
         foundPlayers.removeAll()
         teamStats = nil
+        playerPerformances.removeAll()
         analysisComplete = false
         hasErrors = false
         errorMessage = ""
