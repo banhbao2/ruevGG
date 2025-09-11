@@ -3,25 +3,19 @@ import SwiftUI
 
 @MainActor
 class TeamAnalysisViewModel: ObservableObject {
-    // Input Management
     @Published var summonerInputs: [String] = Array(repeating: "", count: 5)
     @Published var inputErrors: [String?] = Array(repeating: nil, count: 5)
-    
-    // Game count selection
     @Published var selectedGameCount: Int = 10
     let gameCountOptions = [5, 10, 15, 20]
     
-    // Analysis State
     @Published var isAnalyzing = false
     @Published var analysisProgress = ""
     @Published var analysisComplete = false
     
-    // Results
     @Published var foundPlayers: [CompletePlayer] = []
     @Published var teamStats: TeamStats?
-    @Published var playerPerformances: [String: PlayerPerformanceSummary] = [:] // puuid -> performance
+    @Published var playerPerformances: [String: PlayerPerformanceSummary] = [:]
     
-    // Error Handling
     @Published var showError = false
     @Published var errorMessage = ""
     @Published var hasErrors = false
@@ -29,10 +23,7 @@ class TeamAnalysisViewModel: ObservableObject {
     private let riotAPIService = RiotAPIService.shared
     private let teamAnalysisManager = TeamAnalysisManager()
     
-    // MARK: - Public Methods
-    
     func canAnalyze() -> Bool {
-        // Need at least 2 valid inputs to analyze
         let validInputs = summonerInputs.filter { input in
             !input.isEmpty && input.contains("#")
         }
@@ -40,7 +31,6 @@ class TeamAnalysisViewModel: ObservableObject {
     }
     
     func analyzeTeam() async {
-        // Reset state
         isAnalyzing = true
         analysisComplete = false
         hasErrors = false
@@ -49,21 +39,17 @@ class TeamAnalysisViewModel: ObservableObject {
         playerPerformances.removeAll()
         inputErrors = Array(repeating: nil, count: 5)
         
-        // Parse and validate inputs
         var validInputs: [(index: Int, name: String, tag: String)] = []
         
         for (index, input) in summonerInputs.enumerated() {
-            // Skip empty inputs for optional fields
             if input.isEmpty {
                 if index < 2 {
-                    // First two are required
                     inputErrors[index] = "Required field"
                     hasErrors = true
                 }
                 continue
             }
             
-            // Parse the input
             if let parsed = parseInput(input) {
                 validInputs.append((index: index, name: parsed.name, tag: parsed.tag))
             } else {
@@ -72,7 +58,6 @@ class TeamAnalysisViewModel: ObservableObject {
             }
         }
         
-        // Check if we have at least 2 valid inputs
         if validInputs.count < 2 {
             errorMessage = "Please enter at least 2 valid summoner names"
             showError = true
@@ -80,34 +65,39 @@ class TeamAnalysisViewModel: ObservableObject {
             return
         }
         
-        // Search for each player
         analysisProgress = "Finding summoners..."
         
-        for validInput in validInputs {
-            analysisProgress = "Searching for \(validInput.name)#\(validInput.tag)..."
-            
-            do {
-                let account = try await riotAPIService.fetchSummoner(
-                    name: validInput.name,
-                    tag: validInput.tag
-                )
-                
-                let summonerDetails = try await riotAPIService.fetchSummonerByPUUID(account.puuid)
-                
-                let player = CompletePlayer(account: account, summoner: summonerDetails)
-                foundPlayers.append(player)
-                
-                // Add delay to avoid rate limiting
-                try? await Task.sleep(nanoseconds: 1_200_000_000) // 1.2 seconds
-                
-            } catch {
-                inputErrors[validInput.index] = "Summoner not found"
-                hasErrors = true
-                print("Failed to find \(validInput.name)#\(validInput.tag): \(error)")
+        let players = await withTaskGroup(of: (Int, CompletePlayer?).self) { group in
+            for validInput in validInputs {
+                group.addTask {
+                    do {
+                        let account = try await self.riotAPIService.fetchSummoner(
+                            name: validInput.name,
+                            tag: validInput.tag
+                        )
+                        let summonerDetails = try await self.riotAPIService.fetchSummonerByPUUID(account.puuid)
+                        return (validInput.index, CompletePlayer(account: account, summoner: summonerDetails))
+                    } catch {
+                        await MainActor.run {
+                            self.inputErrors[validInput.index] = "Summoner not found"
+                            self.hasErrors = true
+                        }
+                        return (validInput.index, nil)
+                    }
+                }
             }
+            
+            var results: [(Int, CompletePlayer)] = []
+            for await (index, player) in group {
+                if let player = player {
+                    results.append((index, player))
+                }
+            }
+            return results.sorted { $0.0 < $1.0 }.map { $0.1 }
         }
         
-        // Check if we found at least 2 players
+        foundPlayers = players
+        
         if foundPlayers.count < 2 {
             errorMessage = "Could not find at least 2 valid summoners. Please check the names and try again."
             showError = true
@@ -115,24 +105,18 @@ class TeamAnalysisViewModel: ObservableObject {
             return
         }
         
-        // Analyze team performance with selected game count
         analysisProgress = "Analyzing last \(selectedGameCount) games played together..."
-        
-        // Create a custom analysis manager with selected games limit
         teamAnalysisManager.targetGamesCount = selectedGameCount
         
         await teamAnalysisManager.analyzeTeamPerformance(players: foundPlayers)
         
-        // Store results
         teamStats = teamAnalysisManager.teamStats
         playerPerformances = teamAnalysisManager.playerPerformances
         
-        // Update state
         analysisComplete = true
         isAnalyzing = false
         analysisProgress = ""
         
-        // Show error if there was an issue during analysis
         if !teamAnalysisManager.errorMessage.isEmpty {
             errorMessage = teamAnalysisManager.errorMessage
             showError = true
@@ -159,6 +143,6 @@ class TeamAnalysisViewModel: ObservableObject {
         analysisComplete = false
         hasErrors = false
         errorMessage = ""
-        selectedGameCount = 10 // Reset to default
+        selectedGameCount = 10
     }
 }

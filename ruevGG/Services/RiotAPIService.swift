@@ -1,6 +1,5 @@
 import Foundation
 
-// MARK: - API Error Types
 enum APIError: Error, LocalizedError {
     case invalidURL
     case invalidResponse
@@ -27,11 +26,9 @@ enum APIError: Error, LocalizedError {
     }
 }
 
-// MARK: - Main RiotAPIService Class
 class RiotAPIService {
     static let shared = RiotAPIService()
     
-    // IMPORTANT: Replace with your actual Riot API key
     var apiKey: String {
         if let url = Bundle.main.url(forResource: "APIKeys", withExtension: "plist"),
            let data = try? Data(contentsOf: url),
@@ -45,13 +42,8 @@ class RiotAPIService {
 
     private init() {}
     
-    // MARK: - Account/Summoner Methods
-    
     func fetchSummoner(name: String, tag: String) async throws -> Account {
         let urlString = "https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/\(name)/\(tag)"
-        
-        print("🔍 Searching for: \(name)#\(tag)")
-        print("📡 URL: \(urlString)")
         
         guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "") else {
             throw APIError.invalidURL
@@ -68,8 +60,6 @@ class RiotAPIService {
                 throw APIError.invalidResponse
             }
             
-            print("📡 Status Code: \(httpResponse.statusCode)")
-            
             switch httpResponse.statusCode {
             case 200:
                 break
@@ -84,28 +74,20 @@ class RiotAPIService {
             let decoder = JSONDecoder()
             do {
                 let account = try decoder.decode(Account.self, from: data)
-                print("✅ Found account: \(account.gameName)#\(account.tagLine)")
                 return account
             } catch {
-                print("❌ Decoding error: \(error)")
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    print("📄 Raw response: \(jsonString)")
-                }
                 throw APIError.decodingFailed
             }
             
         } catch let error as APIError {
             throw error
         } catch {
-            print("❌ Network error: \(error)")
             throw APIError.requestFailed
         }
     }
     
     func fetchSummonerByPUUID(_ puuid: String, region: String = "euw1") async throws -> SummonerDetails {
         let urlString = "https://\(region).api.riotgames.com/lol/summoner/v4/summoners/by-puuid/\(puuid)"
-        
-        print("🔍 Getting summoner details for PUUID: \(puuid)")
         
         guard let url = URL(string: urlString) else {
             throw APIError.invalidURL
@@ -121,8 +103,6 @@ class RiotAPIService {
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.invalidResponse
             }
-            
-            print("📡 Summoner Details Status Code: \(httpResponse.statusCode)")
             
             switch httpResponse.statusCode {
             case 200:
@@ -138,81 +118,21 @@ class RiotAPIService {
             let decoder = JSONDecoder()
             do {
                 let summonerDetails = try decoder.decode(SummonerDetails.self, from: data)
-                print("✅ Got summoner details - Level: \(summonerDetails.summonerLevel)")
                 return summonerDetails
             } catch {
-                print("❌ Summoner details decoding error: \(error)")
-                if let jsonString = String(data: data, encoding: .utf8) {
-                    print("📄 Raw response: \(jsonString)")
-                }
                 throw APIError.decodingFailed
             }
             
         } catch let error as APIError {
             throw error
         } catch {
-            print("❌ Summoner details network error: \(error)")
             throw APIError.requestFailed
         }
     }
-}
-
-// MARK: - Match History Models
-struct MatchDetails: Codable {
-    let metadata: MatchMetadata
-    let info: MatchInfo
-}
-
-struct MatchMetadata: Codable {
-    let matchId: String
-    let participants: [String] // Array of PUUIDs
-}
-
-struct MatchInfo: Codable {
-    let gameCreation: Int64
-    let gameDuration: Int
-    let gameMode: String
-    let gameType: String
-    let queueId: Int
-    let participants: [ParticipantDetails]
-    let teams: [TeamDetails]
-}
-
-struct ParticipantDetails: Codable {
-    let puuid: String
-    let championName: String
-    let kills: Int
-    let deaths: Int
-    let assists: Int
-    let win: Bool
-    let teamId: Int
-    let individualPosition: String // TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY
-    let totalMinionsKilled: Int
-    let neutralMinionsKilled: Int
-    let totalDamageDealtToChampions: Int?
-    let totalDamageTaken: Int?
-    let goldEarned: Int?
-    let visionScore: Int?
     
-    var totalCS: Int {
-        return totalMinionsKilled + neutralMinionsKilled
-    }
-}
-
-struct TeamDetails: Codable {
-    let teamId: Int
-    let win: Bool
-}
-
-// MARK: - RiotAPIService Extensions
-extension RiotAPIService {
-    
-    func fetchMatchHistory(for puuid: String, region: String = "europe", count: Int = 20) async throws -> [String] {
-        // Convert server region to routing value for match-v5 API
+    func fetchMatchHistory(for puuid: String, region: String = "europe", start: Int = 0, count: Int = 20) async throws -> [String] {
         let routingRegion = getMatchRegionalEndpoint(for: region)
-        let urlString = "https://\(routingRegion).api.riotgames.com/lol/match/v5/matches/by-puuid/\(puuid)/ids?start=0&count=\(count)"
-        
-        print("🎮 Getting match history from: \(urlString)")
+        let urlString = "https://\(routingRegion).api.riotgames.com/lol/match/v5/matches/by-puuid/\(puuid)/ids?start=\(start)&count=\(count)"
         
         guard let url = URL(string: urlString) else {
             throw APIError.invalidURL
@@ -229,8 +149,6 @@ extension RiotAPIService {
                 throw APIError.invalidResponse
             }
             
-            print("📡 Match History Status Code: \(httpResponse.statusCode)")
-            
             switch httpResponse.statusCode {
             case 200:
                 break
@@ -245,23 +163,19 @@ extension RiotAPIService {
             let decoder = JSONDecoder()
             do {
                 let matchIds = try decoder.decode([String].self, from: data)
-                print("✅ Successfully got \(matchIds.count) match IDs")
                 return matchIds
             } catch {
-                print("❌ Match history decoding error: \(error)")
                 throw APIError.decodingFailed
             }
             
         } catch let error as APIError {
             throw error
         } catch {
-            print("❌ Match history network error: \(error)")
             throw APIError.requestFailed
         }
     }
     
     func fetchMatchDetails(matchId: String, region: String = "europe") async throws -> MatchDetails {
-        // Convert server region to routing value for match-v5 API
         let routingRegion = getMatchRegionalEndpoint(for: region)
         let urlString = "https://\(routingRegion).api.riotgames.com/lol/match/v5/matches/\(matchId)"
         
@@ -296,19 +210,16 @@ extension RiotAPIService {
                 let matchDetails = try decoder.decode(MatchDetails.self, from: data)
                 return matchDetails
             } catch {
-                print("❌ Match details decoding error: \(error)")
                 throw APIError.decodingFailed
             }
             
         } catch let error as APIError {
             throw error
         } catch {
-            print("❌ Match details network error: \(error)")
             throw APIError.requestFailed
         }
     }
     
-    // Helper function to get the correct regional endpoint for match API
     private func getMatchRegionalEndpoint(for region: String) -> String {
         switch region.uppercased() {
         case "EUW1", "EUW", "EUNE1", "EUNE", "TR1", "TR", "RU1", "RU":
