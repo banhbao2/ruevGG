@@ -4,6 +4,7 @@ struct PlayerDetailView: View {
     let player: CompletePlayer
     let performanceSummary: PlayerPerformanceSummary
     let gameModes: [GameModeStats]
+    var searchedPlayers: [CompletePlayer] = [] // Add this parameter
     
     @State private var selectedMode: Int? = nil
     @State private var showingMatchHistory = false
@@ -35,7 +36,8 @@ struct PlayerDetailView: View {
         .sheet(isPresented: $showingMatchHistory) {
             MatchHistoryView(
                 matches: filteredSummary.matches,
-                playerName: player.displayName
+                playerName: player.displayName,
+                searchedPlayers: searchedPlayers.isEmpty ? [player] : searchedPlayers
             )
         }
         .onAppear {

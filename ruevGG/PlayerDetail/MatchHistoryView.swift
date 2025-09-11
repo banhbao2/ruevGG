@@ -3,11 +3,17 @@ import SwiftUI
 struct MatchHistoryView: View {
     let matches: [PlayerMatchData]
     let playerName: String
+    var searchedPlayers: [CompletePlayer] = [] // Pass this from parent view
+    
     @Environment(\.dismiss) private var dismiss
     @State private var selectedMode: Int? = nil
     @State private var expandedMatchId: String? = nil
     @State private var matchParticipants: [String: [MatchParticipant]] = [:]
     @State private var animateIn = false
+    
+    var searchedPuuids: Set<String> {
+        Set(searchedPlayers.map { $0.puuid })
+    }
     
     var gameModes: [GameModeStats] {
         let grouped = Dictionary(grouping: matches, by: { $0.queueId })
@@ -201,7 +207,7 @@ struct MatchHistoryView: View {
                         if expandedMatchId == match.matchId {
                             MatchParticipantsView(
                                 participants: matchParticipants[match.matchId] ?? [],
-                                currentPlayerPuuid: nil
+                                searchedPuuids: searchedPuuids
                             )
                             .transition(.asymmetric(
                                 insertion: .move(edge: .top).combined(with: .opacity),
@@ -239,16 +245,58 @@ struct MatchHistoryView: View {
         Task {
             do {
                 let details = try await RiotAPIService.shared.fetchMatchDetails(matchId: matchId)
-                let participants = details.info.participants.map { participant in
-                    MatchParticipant(
-                        championName: participant.championName,
-                        kills: participant.kills,
-                        deaths: participant.deaths,
-                        assists: participant.assists,
-                        teamId: participant.teamId,
-                        win: participant.win,
-                        position: participant.individualPosition
-                    )
+                
+                // Fetch summoner names for all participants
+                let participants = await withTaskGroup(of: MatchParticipant?.self) { group in
+                    for participant in details.info.participants {
+                        group.addTask {
+                            do {
+                                // Fetch account info to get summoner name
+                                let urlString = "https://europe.api.riotgames.com/riot/account/v1/accounts/by-puuid/\(participant.puuid)"
+                                guard let url = URL(string: urlString) else { return nil }
+                                
+                                var request = URLRequest(url: url)
+                                request.httpMethod = "GET"
+                                request.addValue(RiotAPIService.shared.apiKey, forHTTPHeaderField: "X-Riot-Token")
+                                
+                                let (data, _) = try await URLSession.shared.data(for: request)
+                                let account = try JSONDecoder().decode(Account.self, from: data)
+                                
+                                return MatchParticipant(
+                                    puuid: participant.puuid,
+                                    summonerName: "\(account.gameName)#\(account.tagLine)",
+                                    championName: participant.championName,
+                                    kills: participant.kills,
+                                    deaths: participant.deaths,
+                                    assists: participant.assists,
+                                    teamId: participant.teamId,
+                                    win: participant.win,
+                                    position: participant.individualPosition
+                                )
+                            } catch {
+                                // Fallback to champion name if API call fails
+                                return MatchParticipant(
+                                    puuid: participant.puuid,
+                                    summonerName: participant.championName,
+                                    championName: participant.championName,
+                                    kills: participant.kills,
+                                    deaths: participant.deaths,
+                                    assists: participant.assists,
+                                    teamId: participant.teamId,
+                                    win: participant.win,
+                                    position: participant.individualPosition
+                                )
+                            }
+                        }
+                    }
+                    
+                    var results: [MatchParticipant] = []
+                    for await participant in group {
+                        if let participant = participant {
+                            results.append(participant)
+                        }
+                    }
+                    return results
                 }
                 
                 await MainActor.run {
@@ -466,7 +514,7 @@ struct PositionIcon: View {
 
 struct MatchParticipantsView: View {
     let participants: [MatchParticipant]
-    let currentPlayerPuuid: String?
+    let searchedPuuids: Set<String>
     
     var team1: [MatchParticipant] {
         participants.filter { $0.teamId == 100 }.sorted { sortByPosition($0.position) < sortByPosition($1.position) }
@@ -494,7 +542,8 @@ struct MatchParticipantsView: View {
                     teamName: "BLUE TEAM",
                     participants: team1,
                     teamColor: Color.blue,
-                    won: team1.first?.win ?? false
+                    won: team1.first?.win ?? false,
+                    searchedPuuids: searchedPuuids
                 )
             }
             
@@ -503,7 +552,8 @@ struct MatchParticipantsView: View {
                     teamName: "RED TEAM",
                     participants: team2,
                     teamColor: Color.red,
-                    won: team2.first?.win ?? false
+                    won: team2.first?.win ?? false,
+                    searchedPuuids: searchedPuuids
                 )
             }
         }
@@ -518,6 +568,7 @@ struct TeamSection: View {
     let participants: [MatchParticipant]
     let teamColor: Color
     let won: Bool
+    let searchedPuuids: Set<String>
     
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
@@ -540,8 +591,11 @@ struct TeamSection: View {
                 Spacer()
             }
             
-            ForEach(participants, id: \.championName) { participant in
-                ParticipantRow(participant: participant)
+            ForEach(participants, id: \.puuid) { participant in
+                ParticipantRow(
+                    participant: participant,
+                    isSearchedPlayer: searchedPuuids.contains(participant.puuid)
+                )
             }
         }
     }
@@ -549,6 +603,7 @@ struct TeamSection: View {
 
 struct ParticipantRow: View {
     let participant: MatchParticipant
+    let isSearchedPlayer: Bool
     
     var kdaColor: Color {
         let kda = Double(participant.kills + participant.assists) / Double(max(participant.deaths, 1))
@@ -562,11 +617,19 @@ struct ParticipantRow: View {
         HStack(spacing: DesignSystem.Spacing.xs) {
             ChampionIconView(championName: participant.championName, size: 24)
             
-            Text(participant.championName)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .frame(width: 80, alignment: .leading)
+            HStack(spacing: 4) {
+                if isSearchedPlayer {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(DesignSystem.Colors.amber)
+                }
+                
+                Text(participant.summonerName)
+                    .font(.system(size: 12, weight: isSearchedPlayer ? .bold : .medium))
+                    .foregroundColor(isSearchedPlayer ? DesignSystem.Colors.primaryAccent : .white)
+                    .lineLimit(1)
+            }
+            .frame(minWidth: 120, alignment: .leading)
             
             Spacer()
             
@@ -581,10 +644,19 @@ struct ParticipantRow: View {
                 .frame(width: 35, alignment: .trailing)
         }
         .padding(.vertical, 4)
+        .padding(.horizontal, isSearchedPlayer ? 8 : 0)
+        .background(
+            isSearchedPlayer ?
+            DesignSystem.Colors.primaryAccent.opacity(0.1) :
+            Color.clear
+        )
+        .cornerRadius(6)
     }
 }
 
 struct MatchParticipant {
+    let puuid: String
+    let summonerName: String
     let championName: String
     let kills: Int
     let deaths: Int

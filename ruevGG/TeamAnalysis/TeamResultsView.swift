@@ -181,7 +181,8 @@ struct TeamResultsView: View {
                         PlayerDetailView(
                             player: player,
                             performanceSummary: performance,
-                            gameModes: teamStats.sortedGameModes
+                            gameModes: teamStats.sortedGameModes,
+                            searchedPlayers: viewModel.foundPlayers
                         )
                     ) {
                         ModernPlayerCard(player: player, performance: performance)
