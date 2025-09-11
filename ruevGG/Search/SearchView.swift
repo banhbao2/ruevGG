@@ -3,109 +3,26 @@ import SwiftUI
 struct SearchView: View {
     @StateObject private var viewModel = TeamAnalysisViewModel()
     @State private var showingResults = false
+    @State private var animateIn = false
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                // Header
-                VStack(spacing: 8) {
-                    Text("Team Performance Analyzer")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                    
-                    Text("Enter 2-5 summoner names to analyze team performance")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 20)
+            ZStack {
+                DesignSystem.Colors.primaryBackground
+                    .ignoresSafeArea()
                 
-                // Summoner Input Fields
-                VStack(spacing: 16) {
-                    ForEach(0..<5) { index in
-                        SummonerInputField(
-                            index: index,
-                            text: $viewModel.summonerInputs[index],
-                            error: viewModel.inputErrors[index]
-                        )
+                ScrollView {
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        headerSection
+                        summonerInputSection
+                        gameCountSection
+                        analyzeButton
                     }
+                    .padding(.horizontal, DesignSystem.Spacing.sm)
+                    .padding(.top, DesignSystem.Spacing.md)
                 }
-                .padding(.horizontal)
-                
-                // Game Count Selector
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Games to Analyze")
-                        .font(.headline)
-                        .padding(.horizontal)
-                    
-                    Text("Number of games played together to analyze")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal)
-                    
-                    HStack(spacing: 12) {
-                        ForEach(viewModel.gameCountOptions, id: \.self) { count in
-                            GameCountButton(
-                                count: count,
-                                isSelected: viewModel.selectedGameCount == count,
-                                action: {
-                                    viewModel.selectedGameCount = count
-                                }
-                            )
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .padding(.top, 8)
-                
-                Spacer()
-                
-                // Analyze Button
-                Button(action: {
-                    Task {
-                        await viewModel.analyzeTeam()
-                        if viewModel.analysisComplete && !viewModel.hasErrors {
-                            showingResults = true
-                        }
-                    }
-                }) {
-                    if viewModel.isAnalyzing {
-                        HStack {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                                .tint(.white)
-                            Text("Analyzing...")
-                                .fontWeight(.semibold)
-                        }
-                    } else {
-                        VStack(spacing: 4) {
-                            Text("Analyze Team Performance")
-                                .fontWeight(.semibold)
-                            Text("Last \(viewModel.selectedGameCount) games together")
-                                .font(.caption)
-                                .opacity(0.9)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(viewModel.canAnalyze() ? Color.blue : Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(12)
-                .disabled(!viewModel.canAnalyze() || viewModel.isAnalyzing)
-                .padding(.horizontal)
-                
-                // Progress indicator
-                if viewModel.isAnalyzing {
-                    Text(viewModel.analysisProgress)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
-                
-                Spacer()
             }
+            .navigationBarHidden(true)
             .navigationDestination(isPresented: $showingResults) {
                 TeamResultsView(viewModel: viewModel)
             }
@@ -116,12 +33,179 @@ struct SearchView: View {
             } message: {
                 Text(viewModel.errorMessage)
             }
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.6)) {
+                    animateIn = true
+                }
+            }
+        }
+    }
+    
+    var headerSection: some View {
+        VStack(spacing: DesignSystem.Spacing.xs) {
+            HStack {
+                Image(systemName: "gamecontroller.fill")
+                    .font(.largeTitle)
+                    .foregroundColor(DesignSystem.Colors.primaryAccent)
+                
+                Text("RUEVGG")
+                    .font(.system(size: 32, weight: .black, design: .default))
+                    .foregroundColor(.white)
+            }
+            .scaleEffect(animateIn ? 1 : 0.8)
+            .opacity(animateIn ? 1 : 0)
+            
+            Text("Team Performance Analyzer")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
+        }
+        .padding(.vertical, DesignSystem.Spacing.md)
+    }
+    
+    var summonerInputSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text("SUMMONERS")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .tracking(1.2)
+            
+            VStack(spacing: DesignSystem.Spacing.xs) {
+                ForEach(0..<5) { index in
+                    ModernInputField(
+                        index: index,
+                        text: $viewModel.summonerInputs[index],
+                        error: viewModel.inputErrors[index]
+                    )
+                    .opacity(animateIn ? 1 : 0)
+                    .offset(y: animateIn ? 0 : 20)
+                    .animation(.easeOut(duration: 0.4).delay(Double(index) * 0.05), value: animateIn)
+                }
+            }
+        }
+    }
+    
+    var gameCountSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text("GAMES TO ANALYZE")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .tracking(1.2)
+            
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                ForEach(viewModel.gameCountOptions, id: \.self) { count in
+                    GameCountChip(
+                        count: count,
+                        isSelected: viewModel.selectedGameCount == count,
+                        action: {
+                            withAnimation(.spring(response: 0.3)) {
+                                viewModel.selectedGameCount = count
+                            }
+                        }
+                    )
+                }
+            }
+        }
+        .opacity(animateIn ? 1 : 0)
+        .animation(.easeOut(duration: 0.6).delay(0.3), value: animateIn)
+    }
+    
+    var analyzeButton: some View {
+        Button(action: {
+            Task {
+                await viewModel.analyzeTeam()
+                if viewModel.analysisComplete && !viewModel.hasErrors {
+                    showingResults = true
+                }
+            }
+        }) {
+            ZStack {
+                if viewModel.isAnalyzing {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(0.8)
+                        Text("ANALYZING...")
+                            .font(.system(size: 14, weight: .bold))
+                            .tracking(1.2)
+                    }
+                } else {
+                    Text("ANALYZE TEAM")
+                        .font(.system(size: 14, weight: .bold))
+                        .tracking(1.2)
+                }
+            }
+        }
+        .primaryButtonStyle()
+        .disabled(!viewModel.canAnalyze() || viewModel.isAnalyzing)
+        .opacity(viewModel.canAnalyze() ? 1 : 0.5)
+        .scaleEffect(viewModel.isAnalyzing ? 0.95 : 1)
+        .animation(.spring(response: 0.3), value: viewModel.isAnalyzing)
+        .padding(.vertical, DesignSystem.Spacing.md)
+    }
+}
+
+struct ModernInputField: View {
+    let index: Int
+    @Binding var text: String
+    let error: String?
+    @FocusState private var isFocused: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                TextField("", text: $text)
+                    .placeholder(when: text.isEmpty) {
+                        Text("Summoner#TAG")
+                            .foregroundColor(DesignSystem.Colors.secondaryText.opacity(0.5))
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($isFocused)
+                
+                if index < 2 {
+                    Text("REQUIRED")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(DesignSystem.Colors.amber)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(DesignSystem.Colors.amber.opacity(0.2))
+                        .cornerRadius(4)
+                }
+                
+                if error != nil {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(DesignSystem.Colors.lossRed)
+                        .font(.system(size: 14))
+                }
+            }
+            .padding(DesignSystem.Spacing.sm)
+            .background(DesignSystem.Colors.darkGray)
+            .cornerRadius(DesignSystem.CornerRadius.medium)
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                    .stroke(
+                        error != nil ? DesignSystem.Colors.lossRed :
+                        isFocused ? DesignSystem.Colors.primaryAccent :
+                        Color.clear,
+                        lineWidth: 2
+                    )
+            )
+            
+            if let error = error {
+                Text(error)
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.Colors.lossRed)
+                    .padding(.horizontal, 4)
+            }
         }
     }
 }
 
-// MARK: - Game Count Button Component
-struct GameCountButton: View {
+struct GameCountChip: View {
     let count: Int
     let isSelected: Bool
     let action: () -> Void
@@ -130,70 +214,43 @@ struct GameCountButton: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Text("\(count)")
-                    .font(.title3)
-                    .fontWeight(isSelected ? .bold : .medium)
-                Text("games")
-                    .font(.caption2)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(isSelected ? .white : DesignSystem.Colors.secondaryText)
+                
+                Text("GAMES")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : DesignSystem.Colors.secondaryText.opacity(0.6))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(isSelected ? Color.blue : Color(.systemGray5))
-            .foregroundColor(isSelected ? .white : .primary)
-            .cornerRadius(8)
-        }
-    }
-}
-
-// MARK: - Summoner Input Field Component
-struct SummonerInputField: View {
-    let index: Int
-    @Binding var text: String
-    let error: String?
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Summoner \(index + 1)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                if index < 2 {
-                    Text("(Required)")
-                        .font(.caption2)
-                        .foregroundColor(.red)
-                } else {
-                    Text("(Optional)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                if error != nil {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundColor(.red)
-                        .font(.caption)
-                }
-            }
-            
-            TextField("Name#Tag (e.g. Faker#KR1)", text: $text)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(error != nil ? Color.red : Color.clear, lineWidth: 1)
+            .padding(.vertical, DesignSystem.Spacing.sm)
+            .background(
+                isSelected ?
+                LinearGradient(
+                    colors: [DesignSystem.Colors.primaryAccent, DesignSystem.Colors.primaryAccent.opacity(0.7)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ) :
+                LinearGradient(
+                    colors: [DesignSystem.Colors.darkGray, DesignSystem.Colors.darkGray],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-            
-            if let error = error {
-                Text(error)
-                    .font(.caption2)
-                    .foregroundColor(.red)
-            }
+            )
+            .cornerRadius(DesignSystem.CornerRadius.medium)
+            .scaleEffect(isSelected ? 1.05 : 1)
         }
     }
 }
 
-#Preview {
-    SearchView()
+extension View {
+    func placeholder<Content: View>(
+        when shouldShow: Bool,
+        alignment: Alignment = .leading,
+        @ViewBuilder placeholder: () -> Content) -> some View {
+        
+        ZStack(alignment: alignment) {
+            placeholder().opacity(shouldShow ? 1 : 0)
+            self
+        }
+    }
 }

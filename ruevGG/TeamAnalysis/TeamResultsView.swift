@@ -4,6 +4,7 @@ struct TeamResultsView: View {
     @ObservedObject var viewModel: TeamAnalysisViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedMode: Int? = nil
+    @State private var animateIn = false
     
     var filteredStats: (games: Int, wins: Int, losses: Int, winRate: Double) {
         guard let teamStats = viewModel.teamStats else {
@@ -18,212 +19,242 @@ struct TeamResultsView: View {
     }
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                VStack(spacing: 8) {
-                    Text("Team Analysis Results")
-                        .font(.title2)
-                        .fontWeight(.bold)
+        ZStack {
+            DesignSystem.Colors.primaryBackground
+                .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    headerSection
                     
-                    Text("Target: \(viewModel.selectedGameCount) games played together")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.top)
-                
-                if !viewModel.foundPlayers.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Players Analyzed")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        
-                        Text("Tap a player to view detailed stats")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                        
-                        ForEach(viewModel.foundPlayers, id: \.puuid) { player in
-                            if let performance = viewModel.playerPerformances[player.puuid],
-                               let teamStats = viewModel.teamStats {
-                                NavigationLink(destination:
-                                    PlayerDetailView(
-                                        player: player,
-                                        performanceSummary: performance,
-                                        gameModes: teamStats.sortedGameModes
-                                    )
-                                ) {
-                                    HStack(spacing: 12) {
-                                        // Use profileIconId from the player object
-                                        ProfileIconView(iconId: player.profileIconId, size: 40)
-                                        
-                                        VStack(alignment: .leading) {
-                                            Text(player.displayName)
-                                                .font(.subheadline)
-                                                .fontWeight(.medium)
-                                                .foregroundColor(.primary)
-                                            HStack(spacing: 8) {
-                                                Text("Level \(player.level)")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                
-                                                if performance.totalGames > 0 {
-                                                    Text("•")
-                                                        .foregroundColor(.secondary)
-                                                    Text(String(format: "%.1f/%.1f/%.1f",
-                                                               performance.averageKills,
-                                                               performance.averageDeaths,
-                                                               performance.averageAssists))
-                                                        .font(.caption)
-                                                        .foregroundColor(.secondary)
-                                                }
-                                            }
-                                        }
-                                        Spacer()
-                                        
-                                        VStack(alignment: .trailing, spacing: 2) {
-                                            if performance.totalGames > 0 {
-                                                Text(String(format: "%.0f%%", performance.winRate))
-                                                    .font(.subheadline)
-                                                    .fontWeight(.semibold)
-                                                    .foregroundColor(performance.winRate >= 50 ? .green : .red)
-                                                Text("\(performance.wins)W \(performance.losses)L")
-                                                    .font(.caption2)
-                                                    .foregroundColor(.secondary)
-                                            } else {
-                                                Image(systemName: "checkmark.circle.fill")
-                                                    .foregroundColor(.green)
-                                            }
-                                        }
-                                        
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    .padding(.horizontal)
-                                    .padding(.vertical, 8)
-                                    .background(Color(.tertiarySystemBackground))
-                                    .cornerRadius(8)
-                                    .padding(.horizontal)
-                                }
-                            } else {
-                                HStack(spacing: 12) {
-                                    ProfileIconView(iconId: player.profileIconId, size: 40)
-                                    
-                                    VStack(alignment: .leading) {
-                                        Text(player.displayName)
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-                                        Text("Level \(player.level)")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                }
-                                .padding(.horizontal)
-                                .padding(.vertical, 8)
-                                .background(Color(.tertiarySystemBackground))
-                                .cornerRadius(8)
-                                .padding(.horizontal)
-                            }
-                        }
-                    }
-                }
-                
-                if let teamStats = viewModel.teamStats {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Team Performance")
-                            .font(.headline)
-                            .padding(.horizontal)
+                    if let teamStats = viewModel.teamStats {
+                        teamPerformanceCard
                         
                         if !teamStats.sortedGameModes.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Game Modes")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal)
-                                
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
-                                        ModeFilterButton(
-                                            title: "All Modes",
-                                            count: teamStats.gamesPlayedTogether,
-                                            isSelected: selectedMode == nil,
-                                            action: { selectedMode = nil }
-                                        )
-                                        
-                                        ForEach(teamStats.sortedGameModes, id: \.queueId) { mode in
-                                            ModeFilterButton(
-                                                title: mode.modeName,
-                                                count: mode.games,
-                                                isSelected: selectedMode == mode.queueId,
-                                                action: { selectedMode = mode.queueId }
-                                            )
-                                        }
-                                    }
-                                    .padding(.horizontal)
-                                }
-                            }
+                            gameModeFilter
                         }
                         
-                        TeamResultCard(
-                            teamStats: teamStats,
-                            targetGames: viewModel.selectedGameCount,
-                            filteredStats: filteredStats,
-                            selectedModeName: selectedMode != nil ?
-                                teamStats.gamesByMode[selectedMode!]?.modeName ?? "Unknown" :
-                                "All Modes"
-                        )
-                        .padding(.horizontal)
+                        playersSection
                     }
-                } else {
-                    VStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.largeTitle)
-                            .foregroundColor(.orange)
-                        
-                        Text("No games found")
-                            .font(.headline)
-                        
-                        Text("These players haven't played together recently")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding()
                 }
-                
-                Button(action: { dismiss() }) {
-                    Text("Back to Search")
-                        .fontWeight(.medium)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color(.systemGray5))
-                        .foregroundColor(.primary)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal)
-                .padding(.bottom)
+                .padding(.horizontal, DesignSystem.Spacing.sm)
+                .padding(.bottom, 100)
+            }
+            
+            VStack {
+                Spacer()
+                bottomBar
             }
         }
-        .navigationTitle("Results")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: { dismiss() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
+        .navigationBarHidden(true)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.6)) {
+                animateIn = true
+            }
+        }
+    }
+    
+    var headerSection: some View {
+        HStack {
+            Button(action: { dismiss() }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .bold))
+                    Text("BACK")
+                        .font(.system(size: 14, weight: .bold))
+                        .tracking(1.2)
+                }
+                .foregroundColor(DesignSystem.Colors.primaryAccent)
+            }
+            
+            Spacer()
+            
+            Text("TEAM ANALYSIS")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+                .tracking(1.2)
+            
+            Spacer()
+            
+            Color.clear
+                .frame(width: 60)
+        }
+        .padding(.vertical, DesignSystem.Spacing.sm)
+    }
+    
+    var teamPerformanceCard: some View {
+        VStack(spacing: DesignSystem.Spacing.md) {
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("WIN RATE")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                        .tracking(1.2)
+                    
+                    Text(String(format: "%.0f%%", filteredStats.winRate))
+                        .font(.system(size: 48, weight: .black))
+                        .foregroundColor(winRateColor)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: DesignSystem.Spacing.xs) {
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("\(filteredStats.wins)")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(DesignSystem.Colors.victoryGreen)
+                            Text("WINS")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(DesignSystem.Colors.secondaryText)
+                        }
+                        
+                        Text("/")
+                            .font(.system(size: 20))
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(filteredStats.losses)")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(DesignSystem.Colors.lossRed)
+                            Text("LOSSES")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(DesignSystem.Colors.secondaryText)
+                        }
                     }
+                    
+                    Text("\(filteredStats.games) GAMES")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                }
+            }
+            
+            WinRateBar(winRate: filteredStats.winRate)
+        }
+        .cardStyle()
+        .scaleEffect(animateIn ? 1 : 0.9)
+        .opacity(animateIn ? 1 : 0)
+    }
+    
+    var gameModeFilter: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text("GAME MODE")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .tracking(1.2)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DesignSystem.Spacing.xs) {
+                    ModeChip(
+                        title: "ALL",
+                        count: viewModel.teamStats?.gamesPlayedTogether ?? 0,
+                        isSelected: selectedMode == nil,
+                        action: { selectedMode = nil }
+                    )
+                    
+                    ForEach(viewModel.teamStats?.sortedGameModes ?? [], id: \.queueId) { mode in
+                        ModeChip(
+                            title: mode.modeName.uppercased(),
+                            count: mode.games,
+                            isSelected: selectedMode == mode.queueId,
+                            action: { selectedMode = mode.queueId }
+                        )
+                    }
+                }
+            }
+        }
+        .opacity(animateIn ? 1 : 0)
+        .animation(.easeOut(duration: 0.6).delay(0.1), value: animateIn)
+    }
+    
+    var playersSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text("PLAYERS")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .tracking(1.2)
+            
+            ForEach(Array(viewModel.foundPlayers.enumerated()), id: \.element.puuid) { index, player in
+                if let performance = viewModel.playerPerformances[player.puuid],
+                   let teamStats = viewModel.teamStats {
+                    NavigationLink(destination:
+                        PlayerDetailView(
+                            player: player,
+                            performanceSummary: performance,
+                            gameModes: teamStats.sortedGameModes
+                        )
+                    ) {
+                        ModernPlayerCard(player: player, performance: performance)
+                            .opacity(animateIn ? 1 : 0)
+                            .offset(y: animateIn ? 0 : 20)
+                            .animation(.easeOut(duration: 0.4).delay(Double(index) * 0.1 + 0.2), value: animateIn)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
         }
     }
+    
+    var bottomBar: some View {
+        HStack {
+            Button(action: { dismiss() }) {
+                Text("NEW ANALYSIS")
+                    .font(.system(size: 14, weight: .bold))
+                    .tracking(1.2)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .background(DesignSystem.Colors.primaryAccent)
+                    .cornerRadius(DesignSystem.CornerRadius.medium)
+            }
+        }
+        .padding(DesignSystem.Spacing.sm)
+        .background(
+            DesignSystem.Colors.primaryBackground
+                .ignoresSafeArea()
+                .shadow(color: .black.opacity(0.3), radius: 10, y: -5)
+        )
+    }
+    
+    var winRateColor: Color {
+        if filteredStats.winRate >= 60 {
+            return DesignSystem.Colors.victoryGreen
+        } else if filteredStats.winRate >= 50 {
+            return DesignSystem.Colors.primaryAccent
+        } else if filteredStats.winRate >= 40 {
+            return DesignSystem.Colors.amber
+        } else {
+            return DesignSystem.Colors.lossRed
+        }
+    }
 }
 
-struct ModeFilterButton: View {
+struct WinRateBar: View {
+    let winRate: Double
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(DesignSystem.Colors.lossRed.opacity(0.3))
+                
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(
+                        LinearGradient(
+                            colors: [DesignSystem.Colors.victoryGreen, DesignSystem.Colors.victoryGreen.opacity(0.7)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: geometry.size.width * (winRate / 100))
+                    .animation(.spring(response: 0.5), value: winRate)
+            }
+        }
+        .frame(height: 8)
+    }
+}
+
+struct ModeChip: View {
     let title: String
     let count: Int
     let isSelected: Bool
@@ -231,146 +262,90 @@ struct ModeFilterButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: 2) {
                 Text(title)
-                    .font(.caption)
-                    .fontWeight(isSelected ? .semibold : .regular)
-                Text("\(count) games")
-                    .font(.caption2)
+                    .font(.system(size: 11, weight: .bold))
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .medium))
                     .opacity(0.8)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(isSelected ? Color.blue : Color(.systemGray5))
-            .foregroundColor(isSelected ? .white : .primary)
-            .cornerRadius(8)
+            .background(
+                isSelected ? DesignSystem.Colors.primaryAccent : DesignSystem.Colors.darkGray
+            )
+            .foregroundColor(.white)
+            .cornerRadius(DesignSystem.CornerRadius.small)
         }
     }
 }
 
-struct TeamResultCard: View {
-    let teamStats: TeamStats
-    let targetGames: Int
-    let filteredStats: (games: Int, wins: Int, losses: Int, winRate: Double)
-    let selectedModeName: String
+struct ModernPlayerCard: View {
+    let player: CompletePlayer
+    let performance: PlayerPerformanceSummary
     
-    var winRateColor: Color {
-        if filteredStats.winRate >= 60 {
-            return .green
-        } else if filteredStats.winRate >= 50 {
-            return .blue
-        } else if filteredStats.winRate >= 40 {
-            return .orange
+    var kdaColor: Color {
+        if performance.averageKDA >= 3 {
+            return DesignSystem.Colors.victoryGreen
+        } else if performance.averageKDA >= 2 {
+            return DesignSystem.Colors.primaryAccent
         } else {
-            return .red
+            return DesignSystem.Colors.amber
         }
     }
     
     var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Image(systemName: "gamecontroller.fill")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text(selectedModeName)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-            }
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            ProfileIconView(iconId: player.profileIconId, size: 56)
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [DesignSystem.Colors.primaryAccent, DesignSystem.Colors.primaryAccent.opacity(0.3)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 2
+                        )
+                )
             
-            HStack(spacing: 24) {
-                VStack(spacing: 4) {
-                    HStack(spacing: 0) {
-                        Text("\(filteredStats.games)")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        if selectedModeName == "All Modes" && filteredStats.games < targetGames {
-                            Text("/\(targetGames)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    Text("Games")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(player.displayName)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
                 
-                Divider()
-                    .frame(height: 40)
-                
-                VStack(spacing: 4) {
-                    Text(String(format: "%.0f%%", filteredStats.winRate))
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(winRateColor)
-                    Text("Win Rate")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                Divider()
-                    .frame(height: 40)
-                
-                VStack(spacing: 4) {
-                    HStack(spacing: 4) {
-                        Text("\(filteredStats.wins)")
-                            .foregroundColor(.green)
-                            .fontWeight(.semibold)
-                        Text("/")
-                            .foregroundColor(.secondary)
-                        Text("\(filteredStats.losses)")
-                            .foregroundColor(.red)
-                            .fontWeight(.semibold)
-                    }
-                    .font(.title3)
-                    Text("W / L")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray5))
-                        .frame(height: 8)
+                HStack(spacing: 8) {
+                    Label("\(player.level)", systemImage: "star.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.amber)
                     
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(winRateColor)
-                        .frame(width: geometry.size.width * (filteredStats.winRate / 100), height: 8)
-                }
-            }
-            .frame(height: 8)
-            
-            if filteredStats.games == 0 {
-                Text("No \(selectedModeName.lowercased()) games found")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .italic()
-            } else if selectedModeName == "All Modes" && filteredStats.games < targetGames {
-                Text("Only found \(filteredStats.games) games together (searched last ~100 matches)")
-                    .font(.caption)
-                    .foregroundColor(.orange)
-                    .italic()
-            }
-            
-            if filteredStats.games > 0 {
-                HStack {
-                    Image(systemName: winRateColor == .green ? "arrow.up.circle.fill" :
-                                     winRateColor == .red ? "arrow.down.circle.fill" :
-                                     "minus.circle.fill")
-                        .foregroundColor(winRateColor)
+                    Text("•")
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
                     
-                    Text(winRateColor == .green ? "Strong performance" :
-                         winRateColor == .red ? "Needs improvement" :
-                         "Average performance")
-                        .font(.caption)
-                        .fontWeight(.medium)
+                    Text(String(format: "%.2f KDA", performance.averageKDA))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(kdaColor)
                 }
-                .padding(.top, 8)
             }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(String(format: "%.0f%%", performance.winRate))
+                    .font(.system(size: 20, weight: .black))
+                    .foregroundColor(performance.winRate >= 50 ? DesignSystem.Colors.victoryGreen : DesignSystem.Colors.lossRed)
+                
+                Text("\(performance.wins)W \(performance.losses)L")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.secondaryText)
+            }
+            
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14))
+                .foregroundColor(DesignSystem.Colors.secondaryText)
         }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
+        .padding(DesignSystem.Spacing.sm)
+        .background(DesignSystem.Colors.cardBackground)
+        .cornerRadius(DesignSystem.CornerRadius.large)
     }
 }
