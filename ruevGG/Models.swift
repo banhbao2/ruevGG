@@ -1,25 +1,19 @@
 import Foundation
 
-// Account API Response Model
 struct Account: Codable {
     let puuid: String
     let gameName: String
     let tagLine: String
 }
 
-// Summoner API Response Model (for getting level, icon, etc.)
 struct SummonerDetails: Codable {
-    let id: String?           // Optional - not always returned
-    let accountId: String?    // Optional - not always returned
+    let id: String?
+    let accountId: String?
     let puuid: String
     let profileIconId: Int
     let revisionDate: Int64
     let summonerLevel: Int
     
-    // Note: The 'name' field might not be returned by the puuid endpoint
-    // We'll use the gameName from Account instead
-    
-    // Computed properties for when you need these values
     var summonerId: String {
         return id ?? "unknown"
     }
@@ -29,7 +23,6 @@ struct SummonerDetails: Codable {
     }
 }
 
-// Combined model for UI display
 struct CompletePlayer {
     let account: Account
     let summoner: SummonerDetails
@@ -42,6 +35,7 @@ struct CompletePlayer {
         return summoner.summonerLevel
     }
     
+    // Expose profile icon ID for easy access
     var profileIconId: Int {
         return summoner.profileIconId
     }
@@ -51,7 +45,6 @@ struct CompletePlayer {
     }
 }
 
-// For future duo stats functionality
 struct DuoCombo {
     let playerRole: String
     let teammateRole: String

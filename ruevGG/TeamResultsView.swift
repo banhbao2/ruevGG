@@ -3,7 +3,7 @@ import SwiftUI
 struct TeamResultsView: View {
     @ObservedObject var viewModel: TeamAnalysisViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedMode: Int? = nil // nil = All modes, otherwise specific queueId
+    @State private var selectedMode: Int? = nil
     
     var filteredStats: (games: Int, wins: Int, losses: Int, winRate: Double) {
         guard let teamStats = viewModel.teamStats else {
@@ -20,7 +20,6 @@ struct TeamResultsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Header
                 VStack(spacing: 8) {
                     Text("Team Analysis Results")
                         .font(.title2)
@@ -32,7 +31,6 @@ struct TeamResultsView: View {
                 }
                 .padding(.top)
                 
-                // Found Players Summary
                 if !viewModel.foundPlayers.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Players Analyzed")
@@ -54,7 +52,10 @@ struct TeamResultsView: View {
                                         gameModes: teamStats.sortedGameModes
                                     )
                                 ) {
-                                    HStack {
+                                    HStack(spacing: 12) {
+                                        // Use profileIconId from the player object
+                                        ProfileIconView(iconId: player.profileIconId, size: 40)
+                                        
                                         VStack(alignment: .leading) {
                                             Text(player.displayName)
                                                 .font(.subheadline)
@@ -105,8 +106,9 @@ struct TeamResultsView: View {
                                     .padding(.horizontal)
                                 }
                             } else {
-                                // Fallback for players without performance data
-                                HStack {
+                                HStack(spacing: 12) {
+                                    ProfileIconView(iconId: player.profileIconId, size: 40)
+                                    
                                     VStack(alignment: .leading) {
                                         Text(player.displayName)
                                             .font(.subheadline)
@@ -129,14 +131,12 @@ struct TeamResultsView: View {
                     }
                 }
                 
-                // Team Statistics
                 if let teamStats = viewModel.teamStats {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Team Performance")
                             .font(.headline)
                             .padding(.horizontal)
                         
-                        // Game Mode Breakdown
                         if !teamStats.sortedGameModes.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Game Modes")
@@ -146,7 +146,6 @@ struct TeamResultsView: View {
                                 
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 8) {
-                                        // All modes button
                                         ModeFilterButton(
                                             title: "All Modes",
                                             count: teamStats.gamesPlayedTogether,
@@ -154,7 +153,6 @@ struct TeamResultsView: View {
                                             action: { selectedMode = nil }
                                         )
                                         
-                                        // Individual mode buttons
                                         ForEach(teamStats.sortedGameModes, id: \.queueId) { mode in
                                             ModeFilterButton(
                                                 title: mode.modeName,
@@ -169,7 +167,6 @@ struct TeamResultsView: View {
                             }
                         }
                         
-                        // Filtered Results Card
                         TeamResultCard(
                             teamStats: teamStats,
                             targetGames: viewModel.selectedGameCount,
@@ -197,10 +194,7 @@ struct TeamResultsView: View {
                     .padding()
                 }
                 
-                // Back Button
-                Button(action: {
-                    dismiss()
-                }) {
+                Button(action: { dismiss() }) {
                     Text("Back to Search")
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity)
@@ -218,9 +212,7 @@ struct TeamResultsView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    dismiss()
-                }) {
+                Button(action: { dismiss() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                         Text("Back")
@@ -231,7 +223,6 @@ struct TeamResultsView: View {
     }
 }
 
-// MARK: - Mode Filter Button
 struct ModeFilterButton: View {
     let title: String
     let count: Int
@@ -257,7 +248,6 @@ struct ModeFilterButton: View {
     }
 }
 
-// MARK: - Team Result Card
 struct TeamResultCard: View {
     let teamStats: TeamStats
     let targetGames: Int
@@ -278,7 +268,6 @@ struct TeamResultCard: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            // Mode indicator
             HStack {
                 Image(systemName: "gamecontroller.fill")
                     .font(.caption)
@@ -288,9 +277,7 @@ struct TeamResultCard: View {
                     .fontWeight(.medium)
             }
             
-            // Stats Grid
             HStack(spacing: 24) {
-                // Games Together
                 VStack(spacing: 4) {
                     HStack(spacing: 0) {
                         Text("\(filteredStats.games)")
@@ -310,7 +297,6 @@ struct TeamResultCard: View {
                 Divider()
                     .frame(height: 40)
                 
-                // Win Rate
                 VStack(spacing: 4) {
                     Text(String(format: "%.0f%%", filteredStats.winRate))
                         .font(.title2)
@@ -324,7 +310,6 @@ struct TeamResultCard: View {
                 Divider()
                     .frame(height: 40)
                 
-                // W/L Record
                 VStack(spacing: 4) {
                     HStack(spacing: 4) {
                         Text("\(filteredStats.wins)")
@@ -343,15 +328,12 @@ struct TeamResultCard: View {
                 }
             }
             
-            // Visual Win Rate Bar
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    // Background
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color(.systemGray5))
                         .frame(height: 8)
                     
-                    // Win Rate Fill
                     RoundedRectangle(cornerRadius: 4)
                         .fill(winRateColor)
                         .frame(width: geometry.size.width * (filteredStats.winRate / 100), height: 8)
@@ -359,7 +341,6 @@ struct TeamResultCard: View {
             }
             .frame(height: 8)
             
-            // Status messages
             if filteredStats.games == 0 {
                 Text("No \(selectedModeName.lowercased()) games found")
                     .font(.caption)
@@ -372,7 +353,6 @@ struct TeamResultCard: View {
                     .italic()
             }
             
-            // Performance indicator
             if filteredStats.games > 0 {
                 HStack {
                     Image(systemName: winRateColor == .green ? "arrow.up.circle.fill" :

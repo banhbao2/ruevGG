@@ -151,15 +151,8 @@ struct MatchRow: View {
             // Champion & Stats
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    // Champion Icon Placeholder
-                    Circle()
-                        .fill(Color(.systemGray5))
-                        .frame(width: 32, height: 32)
-                        .overlay(
-                            Text(String(match.championName.prefix(2)))
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                        )
+                    // Champion Icon
+                    ChampionIconView(championName: match.championName, size: 32)
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(match.championName)

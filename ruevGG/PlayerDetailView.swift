@@ -16,10 +16,8 @@ struct PlayerDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // Player Header
                 PlayerHeaderCard(player: player)
                 
-                // Game Mode Filter
                 if !gameModes.isEmpty {
                     GameModeFilterSection(
                         gameModes: gameModes,
@@ -28,32 +26,21 @@ struct PlayerDetailView: View {
                     )
                 }
                 
-                // Performance Overview
                 PerformanceOverviewCard(summary: filteredSummary)
-                
-                // KDA Dashboard
                 KDADashboard(summary: filteredSummary)
                 
-                // Champion Pool
                 if !filteredSummary.championStats.isEmpty {
                     ChampionPoolSection(champions: filteredSummary.championStats)
                 }
                 
-                // Position Stats
                 if !filteredSummary.positionStats.isEmpty {
                     PositionStatsSection(positions: filteredSummary.positionStats)
                 }
                 
-                // Game Economy Stats
                 GameEconomyCard(summary: filteredSummary)
-                
-                // Combat Stats
                 CombatStatsCard(summary: filteredSummary)
-                
-                // Notable Games
                 NotableGamesSection(summary: filteredSummary)
                 
-                // View Match History Button
                 Button(action: { showingMatchHistory = true }) {
                     HStack {
                         Image(systemName: "list.bullet")
@@ -82,26 +69,13 @@ struct PlayerDetailView: View {
     }
 }
 
-// MARK: - Player Header Card
 struct PlayerHeaderCard: View {
     let player: CompletePlayer
     
     var body: some View {
         HStack(spacing: 16) {
-            // Profile Icon placeholder
-            Circle()
-                .fill(LinearGradient(
-                    colors: [.blue, .purple],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ))
-                .frame(width: 60, height: 60)
-                .overlay(
-                    Text(String(player.account.gameName.prefix(2)).uppercased())
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                )
+            // Load actual summoner icon from Riot CDN
+            ProfileIconView(iconId: player.summoner.profileIconId, size: 60)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(player.displayName)
@@ -124,7 +98,6 @@ struct PlayerHeaderCard: View {
     }
 }
 
-// MARK: - Game Mode Filter Section
 struct GameModeFilterSection: View {
     let gameModes: [GameModeStats]
     @Binding var selectedMode: Int?
@@ -138,7 +111,6 @@ struct GameModeFilterSection: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    // All modes
                     FilterChip(
                         title: "All Modes",
                         count: totalGames,
@@ -147,7 +119,6 @@ struct GameModeFilterSection: View {
                         selectedMode = nil
                     }
                     
-                    // Individual modes
                     ForEach(gameModes, id: \.queueId) { mode in
                         FilterChip(
                             title: mode.modeName,
@@ -164,7 +135,6 @@ struct GameModeFilterSection: View {
     }
 }
 
-// MARK: - Filter Chip
 struct FilterChip: View {
     let title: String
     let count: Int
@@ -189,7 +159,6 @@ struct FilterChip: View {
     }
 }
 
-// MARK: - Performance Overview Card
 struct PerformanceOverviewCard: View {
     let summary: PlayerPerformanceSummary
     
@@ -207,7 +176,6 @@ struct PerformanceOverviewCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             HStack(spacing: 0) {
-                // Games Played
                 StatBox(
                     value: "\(summary.totalGames)",
                     label: "Games",
@@ -217,7 +185,6 @@ struct PerformanceOverviewCard: View {
                 Divider()
                     .frame(height: 50)
                 
-                // Win Rate
                 StatBox(
                     value: String(format: "%.0f%%", summary.winRate),
                     label: "Win Rate",
@@ -227,7 +194,6 @@ struct PerformanceOverviewCard: View {
                 Divider()
                     .frame(height: 50)
                 
-                // W/L
                 VStack(spacing: 4) {
                     HStack(spacing: 4) {
                         Text("\(summary.wins)")
@@ -249,7 +215,6 @@ struct PerformanceOverviewCard: View {
                 .frame(maxWidth: .infinity)
             }
             
-            // Win Rate Bar
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4)
@@ -269,7 +234,6 @@ struct PerformanceOverviewCard: View {
     }
 }
 
-// MARK: - Stat Box
 struct StatBox: View {
     let value: String
     let label: String
@@ -289,7 +253,6 @@ struct StatBox: View {
     }
 }
 
-// MARK: - KDA Dashboard
 struct KDADashboard: View {
     let summary: PlayerPerformanceSummary
     
@@ -306,7 +269,6 @@ struct KDADashboard: View {
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
-            // Average KDA Display
             VStack(spacing: 8) {
                 Text(String(format: "%.2f", summary.averageKDA))
                     .font(.largeTitle)
@@ -318,7 +280,6 @@ struct KDADashboard: View {
                     .foregroundColor(.secondary)
             }
             
-            // KDA Breakdown
             HStack(spacing: 20) {
                 VStack(spacing: 4) {
                     Text(String(format: "%.1f", summary.averageKills))
@@ -356,17 +317,26 @@ struct KDADashboard: View {
                 }
             }
             
-            // Total Stats
-            HStack {
-                Label("\(summary.totalKills) total kills", systemImage: "flame.fill")
-                    .font(.caption)
-                    .foregroundColor(.orange)
+            VStack(spacing: 8) {
+                HStack {
+                    Label("\(summary.totalKills) total kills", systemImage: "flame.fill")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                    
+                    Spacer()
+                    
+                    Label("\(summary.totalDeaths) total deaths", systemImage: "xmark.circle.fill")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
                 
-                Spacer()
-                
-                Label("\(summary.totalAssists) total assists", systemImage: "hand.raised.fill")
-                    .font(.caption)
-                    .foregroundColor(.blue)
+                HStack {
+                    Label("\(summary.totalAssists) total assists", systemImage: "hand.raised.fill")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    
+                    Spacer()
+                }
             }
         }
         .padding()
@@ -376,7 +346,6 @@ struct KDADashboard: View {
     }
 }
 
-// MARK: - Champion Pool Section
 struct ChampionPoolSection: View {
     let champions: [ChampionPerformance]
     @State private var showAll = false
@@ -412,7 +381,6 @@ struct ChampionPoolSection: View {
     }
 }
 
-// MARK: - Champion Row
 struct ChampionRow: View {
     let champion: ChampionPerformance
     
@@ -424,15 +392,8 @@ struct ChampionRow: View {
     
     var body: some View {
         HStack {
-            // Champion Icon Placeholder
-            Circle()
-                .fill(Color(.systemGray5))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Text(String(champion.championName.prefix(2)))
-                        .font(.caption)
-                        .fontWeight(.bold)
-                )
+            // Load actual champion icon
+            ChampionIconView(championName: champion.championName, size: 40)
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(champion.championName)
@@ -463,7 +424,6 @@ struct ChampionRow: View {
     }
 }
 
-// MARK: - Position Stats Section
 struct PositionStatsSection: View {
     let positions: [PositionPerformance]
     
@@ -485,7 +445,6 @@ struct PositionStatsSection: View {
     }
 }
 
-// MARK: - Position Card
 struct PositionCard: View {
     let position: PositionPerformance
     
@@ -519,7 +478,6 @@ struct PositionCard: View {
     }
 }
 
-// MARK: - Game Economy Card
 struct GameEconomyCard: View {
     let summary: PlayerPerformanceSummary
     
@@ -588,7 +546,6 @@ struct GameEconomyCard: View {
     }
 }
 
-// MARK: - Combat Stats Card
 struct CombatStatsCard: View {
     let summary: PlayerPerformanceSummary
     
@@ -650,7 +607,6 @@ struct CombatStatsCard: View {
     }
 }
 
-// MARK: - Notable Games Section
 struct NotableGamesSection: View {
     let summary: PlayerPerformanceSummary
     
@@ -693,7 +649,6 @@ struct NotableGamesSection: View {
     }
 }
 
-// MARK: - Notable Game Row
 struct NotableGameRow: View {
     let title: String
     let match: PlayerMatchData
@@ -735,37 +690,5 @@ struct NotableGameRow: View {
         .padding()
         .background(Color(.tertiarySystemBackground))
         .cornerRadius(8)
-    }
-}
-
-#Preview {
-    NavigationView {
-        PlayerDetailView(
-            player: CompletePlayer(
-                account: Account(puuid: "test", gameName: "TestPlayer", tagLine: "NA1"),
-                summoner: SummonerDetails(
-                    id: "test",
-                    accountId: "test",
-                    puuid: "test",
-                    profileIconId: 1,
-                    revisionDate: 0,
-                    summonerLevel: 100
-                )
-            ),
-            performanceSummary: PlayerPerformanceSummary(
-                player: CompletePlayer(
-                    account: Account(puuid: "test", gameName: "TestPlayer", tagLine: "NA1"),
-                    summoner: SummonerDetails(
-                        id: "test",
-                        accountId: "test",
-                        puuid: "test",
-                        profileIconId: 1,
-                        revisionDate: 0,
-                        summonerLevel: 100
-                    )
-                )
-            ),
-            gameModes: []
-        )
     }
 }
